@@ -46,6 +46,16 @@ struct Pet {
     created_at: DateTime<Utc>,
 }
 
+
+// Password struct that will take the place of Pet
+// TODO: Replace Pet with Password
+struct Password {
+    id: usize,
+    username: String,
+    password: String,
+    created_at: DateTime<Utc>
+}
+
 #[derive(Copy, Clone, Debug)]
 enum MenuItem {
     Home,
@@ -221,7 +231,7 @@ fn render_home<'a>() -> Paragraph<'a> {
             Style::default().fg(Color::LightBlue),
         )]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Press 'p' to access pets, 'a' to add random new pets and 'd' to delete the currently selected pet.")]),
+        Spans::from(vec![Span::raw("Press 'p' to access passwords, 'a' to add random new pets and 'd' to delete the currently selected password.")]),
     ])
     .alignment(Alignment::Center)
     .block(
@@ -238,7 +248,7 @@ fn render_pets<'a>(pet_list_state: &ListState) -> (List<'a>, Table<'a>) {
     let pets = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
-        .title("Pets")
+        .title("Passwords")
         .border_type(BorderType::Plain);
 
     let pet_list = read_db().expect("can fetch pet list");
