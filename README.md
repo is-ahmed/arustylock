@@ -1,5 +1,17 @@
-# rust-commandline-example
 
-Example for building a command line application using Rust
 
-You can start it using `cargo run` and then navigate to `Home` by pressing `h`, to the `Pets` menu using `p` and you can add random pets using `a` and deleted the selected pet using `d`. By pressing `q`, you can quit the program.
+# rustlock
+
+This is a password manager that I am making just for learning both how password managers and Rust work. 
+
+This app is based off example code from [this](https://github.com/zupzup/rust-commandline-example) repository.
+
+## Installation
+
+Clone the repository with whichever method you prefer.
+
+Navigate to the directory to where the repository was cloned and run ```cargo run``` in the terminal.
+
+
+## Contribution
+
