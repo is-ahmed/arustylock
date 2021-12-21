@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let menu_titles = vec!["Home", "Pets", "Add", "Delete", "Quit"];
+    let menu_titles = vec!["Home", "Passwords", "Add", "Delete", "Quit"];
     let mut active_menu_item = MenuItem::Home;
     let mut pet_list_state = ListState::default();
     pet_list_state.select(Some(0));
@@ -123,7 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .split(size);
 
-            let copyright = Paragraph::new("pet-CLI 2020 - all rights reserved")
+            let copyright = Paragraph::new("RustLock - all rights reserved")
                 .style(Style::default().fg(Color::LightCyan))
                 .alignment(Alignment::Center)
                 .block(
@@ -190,6 +190,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 KeyCode::Char('d') => {
                     remove_pet_at_index(&mut pet_list_state).expect("can remove pet");
                 }
+
+                KeyCode::Char('j') => {
+                    if let Some(selected) = pet_list_state.selected() {
+                        let amount_pets = read_db().expect("can fetch pet list").len();
+                        if selected >= amount_pets - 1 {
+                            pet_list_state.select(Some(0));
+                        } else {
+                            pet_list_state.select(Some(selected + 1));
+                        }
+                    }
+                }
                 KeyCode::Down => {
                     if let Some(selected) = pet_list_state.selected() {
                         let amount_pets = read_db().expect("can fetch pet list").len();
@@ -197,6 +208,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             pet_list_state.select(Some(0));
                         } else {
                             pet_list_state.select(Some(selected + 1));
+                        }
+                    }
+                }
+
+                KeyCode::Char('k') => {
+                    if let Some(selected) = pet_list_state.selected() {
+                        let amount_pets = read_db().expect("can fetch pet list").len();
+                        if selected > 0 {
+                            pet_list_state.select(Some(selected - 1));
+                        } else {
+                            pet_list_state.select(Some(amount_pets - 1));
                         }
                     }
                 }
@@ -227,7 +249,7 @@ fn render_home<'a>() -> Paragraph<'a> {
         Spans::from(vec![Span::raw("to")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::styled(
-            "pet-CLI",
+            "RustLock",
             Style::default().fg(Color::LightBlue),
         )]),
         Spans::from(vec![Span::raw("")]),
@@ -359,7 +381,15 @@ fn remove_pet_at_index(pet_list_state: &mut ListState) -> Result<(), Error> {
         let mut parsed: Vec<Pet> = serde_json::from_str(&db_content)?;
         parsed.remove(selected);
         fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
-        pet_list_state.select(Some(selected - 1));
+        
+        if selected > 0 {
+            pet_list_state.select(Some(selected - 1));
+        }
     }
     Ok(())
+}
+
+
+fn key_down(){
+
 }
