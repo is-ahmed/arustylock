@@ -37,18 +37,19 @@ enum Event<I> {
     Tick,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct Pet {
-    id: usize,
-    name: String,
-    category: String,
-    age: usize,
-    created_at: DateTime<Utc>,
-}
+// #[derive(Serialize, Deserialize, Clone)]
+// struct Pet {
+//     id: usize,
+//     name: String,
+//     category: String,
+//     age: usize,
+//     created_at: DateTime<Utc>,
+// }
 
 
 // Password struct that will take the place of Pet
 // TODO: Replace Pet with Password
+#[derive(Serialize, Deserialize, Clone)]
 struct Password {
     id: usize,
     username: String,
@@ -59,14 +60,16 @@ struct Password {
 #[derive(Copy, Clone, Debug)]
 enum MenuItem {
     Home,
-    Pets,
+    Passwords,
+    AddPassword,
 }
 
 impl From<MenuItem> for usize {
     fn from(input: MenuItem) -> usize {
         match input {
             MenuItem::Home => 0,
-            MenuItem::Pets => 1,
+            MenuItem::Passwords => 1,
+            MenuItem::AddPassword => 2
         }
     }
 }
@@ -104,8 +107,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let menu_titles = vec!["Home", "Passwords", "Add", "Delete", "Quit"];
     let mut active_menu_item = MenuItem::Home;
-    let mut pet_list_state = ListState::default();
-    pet_list_state.select(Some(0));
+    let mut password_list_state = ListState::default();
+    password_list_state.select(Some(0));
 
     loop {
         terminal.draw(|rect| {
@@ -160,16 +163,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rect.render_widget(tabs, chunks[0]);
             match active_menu_item {
                 MenuItem::Home => rect.render_widget(render_home(), chunks[1]),
-                MenuItem::Pets => {
-                    let pets_chunks = Layout::default()
+                MenuItem::Passwords => {
+                    let passwords_chunks = Layout::default()
                         .direction(Direction::Horizontal)
                         .constraints(
                             [Constraint::Percentage(20), Constraint::Percentage(80)].as_ref(),
                         )
                         .split(chunks[1]);
-                    let (left, right) = render_pets(&pet_list_state);
-                    rect.render_stateful_widget(left, pets_chunks[0], &mut pet_list_state);
-                    rect.render_widget(right, pets_chunks[1]);
+                    let (left, right) = render_passwords(&password_list_state);
+                    rect.render_stateful_widget(left, passwords_chunks[0], &mut password_list_state);
+                    rect.render_widget(right, passwords_chunks[1]);
+                },
+                MenuItem::AddPassword => {
+
                 }
             }
             rect.render_widget(copyright, chunks[2]);
@@ -183,52 +189,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
                 KeyCode::Char('h') => active_menu_item = MenuItem::Home,
-                KeyCode::Char('p') => active_menu_item = MenuItem::Pets,
-                KeyCode::Char('a') => {
-                    add_random_pet_to_db().expect("can add new random pet");
-                }
+                KeyCode::Char('p') => active_menu_item = MenuItem::Passwords,
+                KeyCode::Char('a') => active_menu_item = MenuItem::AddPassword,
+                // KeyCode::Char('a') => {
+                //     add_random_password_to_db().expect("can add new password");
+                // }
                 KeyCode::Char('d') => {
-                    remove_pet_at_index(&mut pet_list_state).expect("can remove pet");
+                    remove_password_at_index(&mut password_list_state).expect("can remove password");
                 }
 
                 KeyCode::Char('j') => {
-                    if let Some(selected) = pet_list_state.selected() {
-                        let amount_pets = read_db().expect("can fetch pet list").len();
-                        if selected >= amount_pets - 1 {
-                            pet_list_state.select(Some(0));
+                    if let Some(selected) = password_list_state.selected() {
+                        let amount_passwords = read_db().expect("can fetch password list").len();
+                        if selected >= amount_passwords - 1 {
+                            password_list_state.select(Some(0));
                         } else {
-                            pet_list_state.select(Some(selected + 1));
+                            password_list_state.select(Some(selected + 1));
                         }
                     }
                 }
                 KeyCode::Down => {
-                    if let Some(selected) = pet_list_state.selected() {
-                        let amount_pets = read_db().expect("can fetch pet list").len();
-                        if selected >= amount_pets - 1 {
-                            pet_list_state.select(Some(0));
+                    if let Some(selected) = password_list_state.selected() {
+                        let amount_passwords = read_db().expect("can fetch password list").len();
+                        if selected >= amount_passwords - 1 {
+                            password_list_state.select(Some(0));
                         } else {
-                            pet_list_state.select(Some(selected + 1));
+                            password_list_state.select(Some(selected + 1));
                         }
                     }
                 }
 
                 KeyCode::Char('k') => {
-                    if let Some(selected) = pet_list_state.selected() {
-                        let amount_pets = read_db().expect("can fetch pet list").len();
+                    if let Some(selected) = password_list_state.selected() {
+                        let amount_passwords = read_db().expect("can fetch password list").len();
                         if selected > 0 {
-                            pet_list_state.select(Some(selected - 1));
+                            password_list_state.select(Some(selected - 1));
                         } else {
-                            pet_list_state.select(Some(amount_pets - 1));
+                            password_list_state.select(Some(amount_passwords - 1));
                         }
                     }
                 }
                 KeyCode::Up => {
-                    if let Some(selected) = pet_list_state.selected() {
-                        let amount_pets = read_db().expect("can fetch pet list").len();
+                    if let Some(selected) = password_list_state.selected() {
+                        let amount_passwords = read_db().expect("can fetch password list").len();
                         if selected > 0 {
-                            pet_list_state.select(Some(selected - 1));
+                            password_list_state.select(Some(selected - 1));
                         } else {
-                            pet_list_state.select(Some(amount_pets - 1));
+                            password_list_state.select(Some(amount_passwords - 1));
                         }
                     }
                 }
@@ -253,7 +260,7 @@ fn render_home<'a>() -> Paragraph<'a> {
             Style::default().fg(Color::LightBlue),
         )]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Press 'p' to access passwords, 'a' to add random new pets and 'd' to delete the currently selected password.")]),
+        Spans::from(vec![Span::raw("Press 'p' to access passwords, 'a' to add a new password and 'd' to delete the currently selected password.")]),
     ])
     .alignment(Alignment::Center)
     .block(
@@ -266,46 +273,45 @@ fn render_home<'a>() -> Paragraph<'a> {
     home
 }
 
-fn render_pets<'a>(pet_list_state: &ListState) -> (List<'a>, Table<'a>) {
-    let pets = Block::default()
+fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>) {
+    let passwords = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
         .title("Passwords")
         .border_type(BorderType::Plain);
 
-    let pet_list = read_db().expect("can fetch pet list");
-    let items: Vec<_> = pet_list
+    let password_list = read_db().expect("can fetch password list");
+    let items: Vec<_> = password_list
         .iter()
-        .map(|pet| {
+        .map(|password| {
             ListItem::new(Spans::from(vec![Span::styled(
-                pet.name.clone(),
+                password.username.clone(),
                 Style::default(),
             )]))
         })
         .collect();
 
-    let selected_pet = pet_list
+    let selected_password = password_list
         .get(
-            pet_list_state
+            password_list_state
                 .selected()
-                .expect("there is always a selected pet"),
+                .expect("there is always a selected password"),
         )
         .expect("exists")
         .clone();
 
-    let list = List::new(items).block(pets).highlight_style(
+    let list = List::new(items).block(passwords).highlight_style(
         Style::default()
             .bg(Color::Yellow)
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
 
-    let pet_detail = Table::new(vec![Row::new(vec![
-        Cell::from(Span::raw(selected_pet.id.to_string())),
-        Cell::from(Span::raw(selected_pet.name)),
-        Cell::from(Span::raw(selected_pet.category)),
-        Cell::from(Span::raw(selected_pet.age.to_string())),
-        Cell::from(Span::raw(selected_pet.created_at.to_string())),
+    let password_detail = Table::new(vec![Row::new(vec![
+        Cell::from(Span::raw(selected_password.id.to_string())),
+        Cell::from(Span::raw(selected_password.username)),
+        Cell::from(Span::raw(selected_password.password)),
+        Cell::from(Span::raw(selected_password.created_at.to_string())),
     ])])
     .header(Row::new(vec![
         Cell::from(Span::styled(
@@ -344,52 +350,71 @@ fn render_pets<'a>(pet_list_state: &ListState) -> (List<'a>, Table<'a>) {
         Constraint::Percentage(20),
     ]);
 
-    (list, pet_detail)
+    (list, password_detail)
 }
 
-fn read_db() -> Result<Vec<Pet>, Error> {
+fn render_create_password(){
+
+}
+
+fn read_db() -> Result<Vec<Password>, Error> {
+
     let db_content = fs::read_to_string(DB_PATH)?;
-    let parsed: Vec<Pet> = serde_json::from_str(&db_content)?;
+    let parsed: Vec<Password> = serde_json::from_str(&db_content)?;
     Ok(parsed)
 }
 
-fn add_random_pet_to_db() -> Result<Vec<Pet>, Error> {
+// fn add_random_password_to_db() -> Result<Vec<Pet>, Error> {
+//     let mut rng = rand::thread_rng();
+//     let db_content = fs::read_to_string(DB_PATH)?;
+//     let mut parsed: Vec<Pet> = serde_json::from_str(&db_content)?;
+//     let catsdogs = match rng.gen_range(0, 1) {
+//         0 => "cats",
+//         _ => "dogs",
+//     };
+
+//     let random_password = Pet {
+//         id: rng.gen_range(0, 9999999),
+//         name: rng.sample_iter(Alphanumeric).take(10).collect(),
+//         category: catsdogs.to_owned(),
+//         age: rng.gen_range(1, 15),
+//         created_at: Utc::now(),
+//     };
+
+//     parsed.push(random_password);
+//     fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
+//     Ok(parsed)
+// }
+
+fn add_password_to_db() -> Result<Vec<Password>, Error>{
+
     let mut rng = rand::thread_rng();
     let db_content = fs::read_to_string(DB_PATH)?;
-    let mut parsed: Vec<Pet> = serde_json::from_str(&db_content)?;
-    let catsdogs = match rng.gen_range(0, 1) {
-        0 => "cats",
-        _ => "dogs",
-    };
+    let mut parsed: Vec<Password> = serde_json::from_str(&db_content)?;
 
-    let random_pet = Pet {
-        id: rng.gen_range(0, 9999999),
-        name: rng.sample_iter(Alphanumeric).take(10).collect(),
-        category: catsdogs.to_owned(),
-        age: rng.gen_range(1, 15),
-        created_at: Utc::now(),
-    };
-
-    parsed.push(random_pet);
     fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
     Ok(parsed)
+
 }
 
-fn remove_pet_at_index(pet_list_state: &mut ListState) -> Result<(), Error> {
-    if let Some(selected) = pet_list_state.selected() {
-        let db_content = fs::read_to_string(DB_PATH)?;
-        let mut parsed: Vec<Pet> = serde_json::from_str(&db_content)?;
-        parsed.remove(selected);
-        fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
-        
-        if selected > 0 {
-            pet_list_state.select(Some(selected - 1));
+fn remove_password_at_index(password_list_state: &mut ListState) -> Result<(), Error> {
+
+
+    // This is a workaround to prevent the program from crashing after removing
+    // the last password
+    let password_list = read_db().expect("can fetch password list");
+    if password_list.len() > 1 {
+        if let Some(selected) = password_list_state.selected() {
+            let db_content = fs::read_to_string(DB_PATH)?;
+            let mut parsed: Vec<Password> = serde_json::from_str(&db_content)?;
+            parsed.remove(selected);
+            fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
+            
+            if selected > 0 {
+                password_list_state.select(Some(selected - 1));
+            }
         }
     }
     Ok(())
 }
 
-
-fn key_down(){
-
-}
