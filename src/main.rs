@@ -1,9 +1,10 @@
 use chrono::prelude::*;
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
-    terminal::{disable_raw_mode, enable_raw_mode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rand::{distributions::Alphanumeric, prelude::*};
+// use rand::{distributions::Alphanumeric, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
@@ -77,6 +78,7 @@ impl From<MenuItem> for usize {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode().expect("can run in raw mode");
 
+
     let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(200);
     thread::spawn(move || {
@@ -100,7 +102,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let stdout = io::stdout();
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
@@ -176,6 +179,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
                 MenuItem::AddPassword => {
 
+                    let field_chunks = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints(
+                            [Constraint::Percentage(50), Constraint::Percentage(50)].as_ref(),
+                        )
+                        .split(chunks[1]);
+                    let fields = render_create_password();
+
+                    let username_field = fields.0;
+                    let password_field = fields.1;
+
+                    rect.render_widget(username_field, field_chunks[0]);
+                    rect.render_widget(password_field, field_chunks[1]);
+
+                    rect.set_cursor(
+                        chunks[1].x + 1,
+                        chunks[1].y + 1
+                    )
+
                 }
             }
             rect.render_widget(copyright, chunks[2]);
@@ -185,8 +207,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Event::Input(event) => match event.code {
                 KeyCode::Char('q') => {
                     disable_raw_mode()?;
-                    terminal.show_cursor()?;
-                    break;
+                    execute!(
+                        terminal.backend_mut(),
+                        LeaveAlternateScreen
+                    );
+                    return Ok(());
                 }
                 KeyCode::Char('h') => active_menu_item = MenuItem::Home,
                 KeyCode::Char('p') => active_menu_item = MenuItem::Passwords,
@@ -245,7 +270,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    Ok(())
+    // Ok(())
 }
 
 fn render_home<'a>() -> Paragraph<'a> {
@@ -353,9 +378,18 @@ fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>
     (list, password_detail)
 }
 
-fn render_create_password(){
-
+fn render_create_password<'a>() -> (Paragraph<'a>, Paragraph<'a>){
+   
+    let username_field = Paragraph::new("")
+        .style(Style::default())
+        .block(Block::default().title("Username").borders(Borders::ALL));
+    let password_field = Paragraph::new("") 
+        .style(Style::default())
+        .block(Block::default().title("Password").borders(Borders::ALL));
+    return (username_field, password_field)
 }
+
+
 
 fn read_db() -> Result<Vec<Password>, Error> {
 
