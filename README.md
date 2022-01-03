@@ -8,6 +8,8 @@ This app is based off example code from [this](https://github.com/zupzup/rust-co
 
 ## Installation
 
+Ensure that you have [Rust](https://www.rust-lang.org/learn/get-started) installed
+
 Clone the repository with whichever method you prefer.
 
 Navigate to the directory to where the repository was cloned and run ```cargo run``` in the terminal.
