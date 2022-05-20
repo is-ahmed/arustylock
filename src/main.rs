@@ -64,12 +64,36 @@ enum MenuItem {
     AddPassword,
 }
 
+enum InputMode {
+    DomainEditing,
+    DomainNormal,
+    UsernameEditing,
+    UsernameNormal,
+    PasswordEditing,
+    PasswordNormal,
+}
+
+impl Default for InputMode {
+    fn default() -> Self {
+        InputMode::DomainNormal
+    }
+}
+
+// struct for managing state in adding new credentials
+#[derive(Default)]
+struct InputState {
+    input_domain: String,
+    input_username: String,
+    input_password: String,
+    input_mode: InputMode,
+}
+
 impl From<MenuItem> for usize {
     fn from(input: MenuItem) -> usize {
         match input {
             MenuItem::Home => 0,
             MenuItem::Passwords => 1,
-            MenuItem::AddPassword => 2
+            MenuItem::AddPassword => 2,
         }
     }
 }
