@@ -377,12 +377,29 @@ fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>
     (list, password_detail)
 }
 
-fn render_create_password(){
+fn render_create_password<'a>(input_state: &InputState) -> (Block<'a>, Block<'a>, Block<'a>) {
+    let domain_input = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::White))
+        .title("New Domain")
+        .border_type(BorderType::Plain);
 
+    let username_input = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::White))
+        .title("New Username")
+        .border_type(BorderType::Plain);
+
+    let password_input = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::White))
+        .title("New Password")
+        .border_type(BorderType::Plain);
+
+    return (domain_input, username_input, password_input);
 }
 
 fn read_db() -> Result<Vec<Password>, Error> {
-
     let db_content = fs::read_to_string(DB_PATH)?;
     let parsed: Vec<Password> = serde_json::from_str(&db_content)?;
     Ok(parsed)
