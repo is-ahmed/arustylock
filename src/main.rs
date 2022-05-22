@@ -45,16 +45,13 @@ enum Event<I> {
 //     age: usize,
 //     created_at: DateTime<Utc>,
 // }
-
-
 // Password struct that will take the place of Pet
-// TODO: Replace Pet with Password
 #[derive(Serialize, Deserialize, Clone)]
 struct Password {
     id: usize,
     username: String,
     password: String,
-    created_at: DateTime<Utc>
+    created_at: DateTime<Utc>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -132,6 +129,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let menu_titles = vec!["Home", "Passwords", "Add", "Delete", "Quit"];
     let mut active_menu_item = MenuItem::Home;
     let mut password_list_state = ListState::default();
+    let add_password = InputState::default();
     password_list_state.select(Some(0));
 
     loop {
@@ -195,11 +193,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .split(chunks[1]);
                     let (left, right) = render_passwords(&password_list_state);
-                    rect.render_stateful_widget(left, passwords_chunks[0], &mut password_list_state);
+                    rect.render_stateful_widget(
+                        left,
+                        passwords_chunks[0],
+                        &mut password_list_state,
+                    );
                     rect.render_widget(right, passwords_chunks[1]);
-                },
+                }
                 MenuItem::AddPassword => {
-
+                    let add_layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(
+                            [
+                                Constraint::Percentage(33),
+                                Constraint::Percentage(33),
+                                Constraint::Percentage(33),
+                            ]
+                            .as_ref(),
+                        )
+                        .split(chunks[1]);
+                    let (top, center, bottom) = render_create_password(&add_password);
+                    rect.render_widget(top, add_layout[0]);
+                    rect.render_widget(center, add_layout[1]);
+                    rect.render_widget(bottom, add_layout[2]);
                 }
             }
             rect.render_widget(copyright, chunks[2]);
@@ -219,7 +235,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 //     add_random_password_to_db().expect("can add new password");
                 // }
                 KeyCode::Char('d') => {
-                    remove_password_at_index(&mut password_list_state).expect("can remove password");
+                    remove_password_at_index(&mut password_list_state)
+                        .expect("can remove password");
                 }
 
                 KeyCode::Char('j') => {
@@ -380,19 +397,31 @@ fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>
 fn render_create_password<'a>(input_state: &InputState) -> (Block<'a>, Block<'a>, Block<'a>) {
     let domain_input = Block::default()
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White))
+        .style(match input_state.input_mode {
+            InputMode::DomainNormal => Style::default().fg(Color::Yellow),
+            InputMode::DomainEditing => Style::default().fg(Color::Green),
+            _ => Style::default().fg(Color::White),
+        })
         .title("New Domain")
         .border_type(BorderType::Plain);
 
     let username_input = Block::default()
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White))
+        .style(match input_state.input_mode {
+            InputMode::UsernameNormal => Style::default().fg(Color::Yellow),
+            InputMode::UsernameEditing => Style::default().fg(Color::Green),
+            _ => Style::default().fg(Color::White),
+        })
         .title("New Username")
         .border_type(BorderType::Plain);
 
     let password_input = Block::default()
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White))
+        .style(match input_state.input_mode {
+            InputMode::PasswordNormal => Style::default().fg(Color::Yellow),
+            InputMode::PasswordEditing => Style::default().fg(Color::Green),
+            _ => Style::default().fg(Color::White),
+        })
         .title("New Password")
         .border_type(BorderType::Plain);
 
@@ -427,20 +456,16 @@ fn read_db() -> Result<Vec<Password>, Error> {
 //     Ok(parsed)
 // }
 
-fn add_password_to_db() -> Result<Vec<Password>, Error>{
-
+fn add_password_to_db() -> Result<Vec<Password>, Error> {
     let mut rng = rand::thread_rng();
     let db_content = fs::read_to_string(DB_PATH)?;
     let mut parsed: Vec<Password> = serde_json::from_str(&db_content)?;
 
     fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
     Ok(parsed)
-
 }
 
 fn remove_password_at_index(password_list_state: &mut ListState) -> Result<(), Error> {
-
-
     // This is a workaround to prevent the program from crashing after removing
     // the last password
     let password_list = read_db().expect("can fetch password list");
@@ -450,7 +475,7 @@ fn remove_password_at_index(password_list_state: &mut ListState) -> Result<(), E
             let mut parsed: Vec<Password> = serde_json::from_str(&db_content)?;
             parsed.remove(selected);
             fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
-            
+
             if selected > 0 {
                 password_list_state.select(Some(selected - 1));
             }
@@ -458,4 +483,3 @@ fn remove_password_at_index(password_list_state: &mut ListState) -> Result<(), E
     }
     Ok(())
 }
-
