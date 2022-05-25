@@ -1,6 +1,6 @@
 use chrono::prelude::*;
 use crossterm::{
-    event::{self, Event as CEvent, KeyCode},
+    event::{self, Event as CEvent, KeyCode, KeyEvent},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use rand::{distributions::Alphanumeric, prelude::*};
@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
 use std::sync::mpsc;
+use std::sync::mpsc::RecvError;
 use std::thread;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -100,26 +101,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(200);
-    thread::spawn(move || {
-        let mut last_tick = Instant::now();
-        loop {
-            let timeout = tick_rate
-                .checked_sub(last_tick.elapsed())
-                .unwrap_or_else(|| Duration::from_secs(0));
-
-            if event::poll(timeout).expect("poll works") {
-                if let CEvent::Key(key) = event::read().expect("can read events") {
-                    tx.send(Event::Input(key)).expect("can send events");
-                }
-            }
-
-            if last_tick.elapsed() >= tick_rate {
-                if let Ok(_) = tx.send(Event::Tick) {
-                    last_tick = Instant::now();
-                }
-            }
-        }
-    });
 
     let stdout = io::stdout();
     let backend = CrosstermBackend::new(stdout);
@@ -131,6 +112,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut password_list_state = ListState::default();
     let add_password = InputState::default();
     password_list_state.select(Some(0));
+
+    thread::spawn(move || {
+        let mut last_tick = Instant::now();
+        loop {
+            let timeout = tick_rate
+                .checked_sub(last_tick.elapsed())
+                .unwrap_or_else(|| Duration::from_secs(0));
+
+            if event::poll(timeout).expect("poll works") {
+                if let CEvent::Key(key) = event::read().expect("can read events") {
+                    tx.send((Event::Input(key))).expect("can send events");
+                }
+            }
+
+            if last_tick.elapsed() >= tick_rate {
+                if let Ok(_) = tx.send(Event::Tick) {
+                    last_tick = Instant::now();
+                }
+            }
+        }
+    });
 
     loop {
         terminal.draw(|rect| {
@@ -220,6 +222,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             rect.render_widget(copyright, chunks[2]);
         })?;
+        // TODO: Find a way to work in the app state for add password page into
+        // the message received by the receiver
+        let received = rx.recv().unwrap();
+        match active_menu_item {
+            MenuItem::Home => {
+                handle_home_keyevent(&received, MenuItem::Home);
+            }
+            MenuItem::Passwords => {
+                handle_passwords_keyevent(&received, MenuItem::Passwords);
+            }
+            MenuItem::AddPassword => {
+                handle_add_keyevent(&received, MenuItem::AddPassword);
+            }
+        }
 
         match rx.recv()? {
             Event::Input(event) => match event.code {
@@ -288,6 +304,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+fn handle_home_keyevent(key_event: &Event<KeyEvent>, menu_item: MenuItem) {}
+
+fn handle_passwords_keyevent(key_event: &Event<KeyEvent>, menu_item: MenuItem) {}
+
+fn handle_add_keyevent(key_event: &Event<KeyEvent>, menu_item: MenuItem) {}
 
 fn render_home<'a>() -> Paragraph<'a> {
     let home = Paragraph::new(vec![
