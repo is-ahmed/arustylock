@@ -17,3 +17,6 @@ Navigate to the directory to where the repository was cloned and run ```cargo ru
 
 ## Contribution
 
+Contributions are always welcome so feel free to make a pull request at any time. There's a high likelihood that
+you can improve something
+
