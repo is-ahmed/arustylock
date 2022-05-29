@@ -1,5 +1,5 @@
 [package]
-name = "rust-commandline-example"
+name = "a-rusty-lock"
 version = "0.1.0"
 authors = ["Mario Zupan <mario@zupzup.org>"]
 edition = "2018"
