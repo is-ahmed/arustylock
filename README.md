@@ -1,6 +1,6 @@
 
 
-# rustlock
+# arustylock
 
 This is a password manager that I am making just for learning both how password managers and Rust work. 
 
