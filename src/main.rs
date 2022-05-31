@@ -5,12 +5,11 @@ use crossterm::{
 };
 use rand::{distributions::Alphanumeric, prelude::*};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::io;
 use std::sync::mpsc;
-use std::sync::mpsc::RecvError;
 use std::thread;
 use std::time::{Duration, Instant};
+use std::{fs, io::Stdout};
 use thiserror::Error;
 use tui::{
     backend::CrosstermBackend,
@@ -110,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let menu_titles = vec!["Home", "Passwords", "Add", "Delete", "Quit"];
     let mut active_menu_item = MenuItem::Home;
     let mut password_list_state = ListState::default();
-    let add_password = InputState::default();
+    let mut add_password_state = InputState::default();
     password_list_state.select(Some(0));
 
     thread::spawn(move || {
@@ -122,7 +121,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if event::poll(timeout).expect("poll works") {
                 if let CEvent::Key(key) = event::read().expect("can read events") {
-                    tx.send((Event::Input(key))).expect("can send events");
+                    tx.send(Event::Input(key)).expect("can send events");
                 }
             }
 
@@ -214,7 +213,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .as_ref(),
                         )
                         .split(chunks[1]);
-                    let (top, center, bottom) = render_create_password(&add_password);
+                    let (top, center, bottom) = render_create_password(&add_password_state);
                     rect.render_widget(top, add_layout[0]);
                     rect.render_widget(center, add_layout[1]);
                     rect.render_widget(bottom, add_layout[2]);
@@ -222,94 +221,134 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             rect.render_widget(copyright, chunks[2]);
         })?;
-        // TODO: Find a way to work in the app state for add password page into
-        // the message received by the receiver
         let received = rx.recv().unwrap();
         match active_menu_item {
             MenuItem::Home => {
-                handle_home_keyevent(&received, MenuItem::Home);
+                handle_home_keyevent(&received, &mut active_menu_item, &mut terminal);
             }
             MenuItem::Passwords => {
-                handle_passwords_keyevent(&received, MenuItem::Passwords);
+                handle_passwords_keyevent(&received, &mut active_menu_item);
             }
             MenuItem::AddPassword => {
-                handle_add_keyevent(&received, MenuItem::AddPassword);
+                handle_add_keyevent(&received, &mut active_menu_item, &mut add_password_state);
             }
         }
+    }
+}
 
-        match rx.recv()? {
+fn handle_home_keyevent(
+    key_event: &Event<KeyEvent>,
+    active_menu_item: &mut MenuItem,
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+) {
+    match key_event {
+        Event::Input(event) => match event.code {
+            KeyCode::Char('q') => {
+                // TODO: Command prompt not showing up properly after quiting
+                disable_raw_mode().expect("Disabling raw mode...");
+                terminal.show_cursor().expect("Showing cursor...");
+                return;
+            }
+            KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
+            KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
+            KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+
+            _ => {}
+        },
+        Event::Tick => {}
+    }
+}
+
+fn handle_passwords_keyevent(key_event: &Event<KeyEvent>, active_menu_item: &mut MenuItem) {
+    match key_event {
+        Event::Input(event) => match event.code {
+            KeyCode::Char('d') => {
+                // delete currrently highlighted credentials
+            }
+            KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
+            KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
+            KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+            _ => {}
+        },
+        Event::Tick => {}
+    }
+}
+
+fn handle_add_keyevent(
+    key_event: &Event<KeyEvent>,
+    active_menu_item: &mut MenuItem,
+    input_state: &mut InputState,
+) {
+    match input_state.input_mode {
+        InputMode::DomainNormal => match key_event {
             Event::Input(event) => match event.code {
-                KeyCode::Char('q') => {
-                    disable_raw_mode()?;
-                    terminal.show_cursor()?;
-                    break;
-                }
-                KeyCode::Char('h') => active_menu_item = MenuItem::Home,
-                KeyCode::Char('p') => active_menu_item = MenuItem::Passwords,
-                KeyCode::Char('a') => active_menu_item = MenuItem::AddPassword,
-                // KeyCode::Char('a') => {
-                //     add_random_password_to_db().expect("can add new password");
-                // }
-                KeyCode::Char('d') => {
-                    remove_password_at_index(&mut password_list_state)
-                        .expect("can remove password");
-                }
-
-                KeyCode::Char('j') => {
-                    if let Some(selected) = password_list_state.selected() {
-                        let amount_passwords = read_db().expect("can fetch password list").len();
-                        if selected >= amount_passwords - 1 {
-                            password_list_state.select(Some(0));
-                        } else {
-                            password_list_state.select(Some(selected + 1));
-                        }
-                    }
-                }
-                KeyCode::Down => {
-                    if let Some(selected) = password_list_state.selected() {
-                        let amount_passwords = read_db().expect("can fetch password list").len();
-                        if selected >= amount_passwords - 1 {
-                            password_list_state.select(Some(0));
-                        } else {
-                            password_list_state.select(Some(selected + 1));
-                        }
-                    }
-                }
-
-                KeyCode::Char('k') => {
-                    if let Some(selected) = password_list_state.selected() {
-                        let amount_passwords = read_db().expect("can fetch password list").len();
-                        if selected > 0 {
-                            password_list_state.select(Some(selected - 1));
-                        } else {
-                            password_list_state.select(Some(amount_passwords - 1));
-                        }
-                    }
-                }
-                KeyCode::Up => {
-                    if let Some(selected) = password_list_state.selected() {
-                        let amount_passwords = read_db().expect("can fetch password list").len();
-                        if selected > 0 {
-                            password_list_state.select(Some(selected - 1));
-                        } else {
-                            password_list_state.select(Some(amount_passwords - 1));
-                        }
-                    }
+                KeyCode::Char('i') => input_state.input_mode = InputMode::DomainEditing,
+                KeyCode::Char('j') => input_state.input_mode = InputMode::UsernameNormal,
+                KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
+                KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
+                KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+        InputMode::DomainEditing => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Esc => input_state.input_mode = InputMode::DomainNormal,
+                KeyCode::Char(c) => input_state.input_domain.push(c),
+                KeyCode::Backspace => {
+                    input_state.input_domain.pop();
                 }
                 _ => {}
             },
             Event::Tick => {}
-        }
+        },
+        InputMode::UsernameNormal => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Char('i') => input_state.input_mode = InputMode::UsernameEditing,
+                KeyCode::Char('j') => input_state.input_mode = InputMode::PasswordNormal,
+                KeyCode::Char('k') => input_state.input_mode = InputMode::DomainNormal,
+                KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
+                KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
+                KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+        InputMode::UsernameEditing => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Esc => input_state.input_mode = InputMode::UsernameNormal,
+                KeyCode::Char(c) => input_state.input_username.push(c),
+                KeyCode::Backspace => {
+                    input_state.input_username.pop();
+                }
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+        InputMode::PasswordNormal => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Char('i') => input_state.input_mode = InputMode::PasswordEditing,
+                KeyCode::Char('k') => input_state.input_mode = InputMode::UsernameNormal,
+                KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
+                KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
+                KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+        InputMode::PasswordEditing => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Esc => input_state.input_mode = InputMode::PasswordNormal,
+                KeyCode::Char(c) => input_state.input_password.push(c),
+                KeyCode::Backspace => {
+                    input_state.input_password.pop();
+                }
+                _ => {}
+            },
+            Event::Tick => {}
+        },
     }
-
-    Ok(())
 }
-
-fn handle_home_keyevent(key_event: &Event<KeyEvent>, menu_item: MenuItem) {}
-
-fn handle_passwords_keyevent(key_event: &Event<KeyEvent>, menu_item: MenuItem) {}
-
-fn handle_add_keyevent(key_event: &Event<KeyEvent>, menu_item: MenuItem) {}
 
 fn render_home<'a>() -> Paragraph<'a> {
     let home = Paragraph::new(vec![
@@ -455,28 +494,6 @@ fn read_db() -> Result<Vec<Password>, Error> {
     let parsed: Vec<Password> = serde_json::from_str(&db_content)?;
     Ok(parsed)
 }
-
-// fn add_random_password_to_db() -> Result<Vec<Pet>, Error> {
-//     let mut rng = rand::thread_rng();
-//     let db_content = fs::read_to_string(DB_PATH)?;
-//     let mut parsed: Vec<Pet> = serde_json::from_str(&db_content)?;
-//     let catsdogs = match rng.gen_range(0, 1) {
-//         0 => "cats",
-//         _ => "dogs",
-//     };
-
-//     let random_password = Pet {
-//         id: rng.gen_range(0, 9999999),
-//         name: rng.sample_iter(Alphanumeric).take(10).collect(),
-//         category: catsdogs.to_owned(),
-//         age: rng.gen_range(1, 15),
-//         created_at: Utc::now(),
-//     };
-
-//     parsed.push(random_password);
-//     fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
-//     Ok(parsed)
-// }
 
 fn add_password_to_db() -> Result<Vec<Password>, Error> {
     let mut rng = rand::thread_rng();
