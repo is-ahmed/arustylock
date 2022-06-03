@@ -49,6 +49,7 @@ enum Event<I> {
 #[derive(Serialize, Deserialize, Clone)]
 struct Password {
     id: usize,
+    domain: String,
     username: String,
     password: String,
     created_at: DateTime<Utc>,
@@ -332,6 +333,7 @@ fn handle_add_keyevent(
                 KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
                 KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
                 KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+                KeyCode::Enter => {}
                 _ => {}
             },
             Event::Tick => {}
@@ -343,6 +345,7 @@ fn handle_add_keyevent(
                 KeyCode::Backspace => {
                     input_state.input_password.pop();
                 }
+                KeyCode::Enter => {}
                 _ => {}
             },
             Event::Tick => {}
@@ -495,10 +498,13 @@ fn read_db() -> Result<Vec<Password>, Error> {
     Ok(parsed)
 }
 
-fn add_password_to_db() -> Result<Vec<Password>, Error> {
-    let mut rng = rand::thread_rng();
+fn add_password_to_db(input_state: &InputState) -> Result<Vec<Password>, Error> {
     let db_content = fs::read_to_string(DB_PATH)?;
-    let mut parsed: Vec<Password> = serde_json::from_str(&db_content)?;
+    let parsed: Vec<Password> = serde_json::from_str(&db_content)?;
+
+    for pat in &parsed {
+        println!("{}", pat.domain);
+    }
 
     fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
     Ok(parsed)
