@@ -48,11 +48,9 @@ enum Event<I> {
 // Password struct that will take the place of Pet
 #[derive(Serialize, Deserialize, Clone)]
 struct Password {
-    id: usize,
     domain: String,
     username: String,
     password: String,
-    created_at: DateTime<Utc>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -333,7 +331,10 @@ fn handle_add_keyevent(
                 KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
                 KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
                 KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
-                KeyCode::Enter => {}
+                KeyCode::Enter => {
+                    add_password_to_db(input_state).expect("Added password");
+                    clear_input(input_state);
+                }
                 _ => {}
             },
             Event::Tick => {}
@@ -345,12 +346,21 @@ fn handle_add_keyevent(
                 KeyCode::Backspace => {
                     input_state.input_password.pop();
                 }
-                KeyCode::Enter => {}
+                KeyCode::Enter => {
+                    add_password_to_db(input_state).expect("Added password");
+                    clear_input(input_state);
+                }
                 _ => {}
             },
             Event::Tick => {}
         },
     }
+}
+
+fn clear_input(input_state: &mut InputState) {
+    input_state.input_domain = String::new();
+    input_state.input_username = String::new();
+    input_state.input_password = String::new();
 }
 
 fn render_home<'a>() -> Paragraph<'a> {
@@ -413,10 +423,9 @@ fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>
     );
 
     let password_detail = Table::new(vec![Row::new(vec![
-        Cell::from(Span::raw(selected_password.id.to_string())),
+        Cell::from(Span::raw(selected_password.domain)),
         Cell::from(Span::raw(selected_password.username)),
         Cell::from(Span::raw(selected_password.password)),
-        Cell::from(Span::raw(selected_password.created_at.to_string())),
     ])])
     .header(Row::new(vec![
         Cell::from(Span::styled(
@@ -526,12 +535,13 @@ fn read_db() -> Result<Vec<Password>, Error> {
 
 fn add_password_to_db(input_state: &InputState) -> Result<Vec<Password>, Error> {
     let db_content = fs::read_to_string(DB_PATH)?;
-    let parsed: Vec<Password> = serde_json::from_str(&db_content)?;
-
-    for pat in &parsed {
-        println!("{}", pat.domain);
-    }
-
+    let mut parsed: Vec<Password> = serde_json::from_str(&db_content)?;
+    let new_password = Password {
+        domain: input_state.input_domain.clone(),
+        username: input_state.input_username.clone(),
+        password: input_state.input_password.clone(),
+    };
+    parsed.push(new_password);
     fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
     Ok(parsed)
 }
