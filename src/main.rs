@@ -458,36 +458,62 @@ fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>
     (list, password_detail)
 }
 
-fn render_create_password<'a>(input_state: &InputState) -> (Block<'a>, Block<'a>, Block<'a>) {
-    let domain_input = Block::default()
-        .borders(Borders::ALL)
+fn render_create_password<'a>(
+    input_state: &'a InputState,
+) -> (Paragraph<'a>, Paragraph<'a>, Paragraph<'a>) {
+    // let domain_input = Block::default()
+    //     .borders(Borders::ALL)
+    //     .style(match input_state.input_mode {
+    //         InputMode::DomainNormal => Style::default().fg(Color::Yellow),
+    //         InputMode::DomainEditing => Style::default().fg(Color::Green),
+    //         _ => Style::default().fg(Color::White),
+    //     })
+    //     .title("New Domain")
+    //     .border_type(BorderType::Plain);
+
+    let domain_input = Paragraph::new(input_state.input_domain.as_ref())
         .style(match input_state.input_mode {
             InputMode::DomainNormal => Style::default().fg(Color::Yellow),
             InputMode::DomainEditing => Style::default().fg(Color::Green),
             _ => Style::default().fg(Color::White),
         })
-        .title("New Domain")
-        .border_type(BorderType::Plain);
+        .block(Block::default().borders(Borders::ALL).title("Domain"));
 
-    let username_input = Block::default()
-        .borders(Borders::ALL)
+    //   let username_input = Block::default()
+    //       .borders(Borders::ALL)
+    //       .style(match input_state.input_mode {
+    //           InputMode::UsernameNormal => Style::default().fg(Color::Yellow),
+    //           InputMode::UsernameEditing => Style::default().fg(Color::Green),
+    //           _ => Style::default().fg(Color::White),
+    //       })
+    //       .title("New Username")
+    //       .border_type(BorderType::Plain);
+
+    let username_input = Paragraph::new(input_state.input_username.as_ref())
         .style(match input_state.input_mode {
             InputMode::UsernameNormal => Style::default().fg(Color::Yellow),
             InputMode::UsernameEditing => Style::default().fg(Color::Green),
             _ => Style::default().fg(Color::White),
         })
-        .title("New Username")
-        .border_type(BorderType::Plain);
+        .block(Block::default().borders(Borders::ALL).title("Username"));
 
-    let password_input = Block::default()
-        .borders(Borders::ALL)
+    let password_input = Paragraph::new(input_state.input_password.as_ref())
         .style(match input_state.input_mode {
             InputMode::PasswordNormal => Style::default().fg(Color::Yellow),
             InputMode::PasswordEditing => Style::default().fg(Color::Green),
             _ => Style::default().fg(Color::White),
         })
-        .title("New Password")
-        .border_type(BorderType::Plain);
+        .block(Block::default().borders(Borders::ALL).title("Password"));
+
+    //  let password_input = Block::default()
+    //      .borders(Borders::ALL)
+    //      .style(match input_state.input_mode {
+    //          InputMode::PasswordNormal => Style::default().fg(Color::Yellow),
+    //          InputMode::PasswordEditing => Style::default().fg(Color::Green),
+    //          _ => Style::default().fg(Color::White),
+    //      })
+    //      .title("New Password")
+    //      .border_type(BorderType::Plain);
 
     return (domain_input, username_input, password_input);
 }
