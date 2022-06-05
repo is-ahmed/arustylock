@@ -429,7 +429,7 @@ fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>
         .iter()
         .map(|password| {
             ListItem::new(Spans::from(vec![Span::styled(
-                password.username.clone(),
+                password.domain.clone(),
                 Style::default(),
             )]))
         })
@@ -458,23 +458,15 @@ fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>
     ])])
     .header(Row::new(vec![
         Cell::from(Span::styled(
-            "ID",
+            "Domain",
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Cell::from(Span::styled(
-            "Name",
+            "Username",
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Cell::from(Span::styled(
-            "Category",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Cell::from(Span::styled(
-            "Age",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Cell::from(Span::styled(
-            "Created At",
+            "Password",
             Style::default().add_modifier(Modifier::BOLD),
         )),
     ]))
@@ -486,11 +478,9 @@ fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>
             .border_type(BorderType::Plain),
     )
     .widths(&[
-        Constraint::Percentage(5),
-        Constraint::Percentage(20),
-        Constraint::Percentage(20),
-        Constraint::Percentage(5),
-        Constraint::Percentage(20),
+        Constraint::Percentage(33),
+        Constraint::Percentage(33),
+        Constraint::Percentage(33),
     ]);
 
     (list, password_detail)
