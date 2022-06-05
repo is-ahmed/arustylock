@@ -148,7 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .split(size);
 
-            let copyright = Paragraph::new("RustLock - all rights reserved")
+            let copyright = Paragraph::new("A Rusty Lock - all rights reserved")
                 .style(Style::default().fg(Color::LightCyan))
                 .alignment(Alignment::Center)
                 .block(
@@ -226,7 +226,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 handle_home_keyevent(&received, &mut active_menu_item, &mut terminal);
             }
             MenuItem::Passwords => {
-                handle_passwords_keyevent(&received, &mut active_menu_item);
+                handle_passwords_keyevent(
+                    &received,
+                    &mut active_menu_item,
+                    &mut password_list_state,
+                );
             }
             MenuItem::AddPassword => {
                 handle_add_keyevent(&received, &mut active_menu_item, &mut add_password_state);
@@ -258,15 +262,40 @@ fn handle_home_keyevent(
     }
 }
 
-fn handle_passwords_keyevent(key_event: &Event<KeyEvent>, active_menu_item: &mut MenuItem) {
+fn handle_passwords_keyevent(
+    key_event: &Event<KeyEvent>,
+    active_menu_item: &mut MenuItem,
+    password_list_state: &mut ListState,
+) {
     match key_event {
         Event::Input(event) => match event.code {
             KeyCode::Char('d') => {
-                // delete currrently highlighted credentials
+                remove_password_at_index(password_list_state).expect("Can remove password");
             }
             KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
             KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
             KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+            KeyCode::Char('j') => {
+                if let Some(selected) = password_list_state.selected() {
+                    let amount_passwords = read_db().expect("can fetch password list").len();
+                    if selected >= amount_passwords - 1 {
+                        password_list_state.select(Some(0));
+                    } else {
+                        password_list_state.select(Some(selected + 1));
+                    }
+                }
+            }
+            KeyCode::Char('k') => {
+                if let Some(selected) = password_list_state.selected() {
+                    let amount_passwords = read_db().expect("can fetch password list").len();
+                    if selected <= 0 {
+                        password_list_state.select(Some(amount_passwords - 1));
+                    } else {
+                        password_list_state.select(Some(selected - 1));
+                    }
+                }
+            }
+
             _ => {}
         },
         Event::Tick => {}
@@ -371,7 +400,7 @@ fn render_home<'a>() -> Paragraph<'a> {
         Spans::from(vec![Span::raw("to")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::styled(
-            "RustLock",
+            "A Rusty Lock - The (((best))) password manager",
             Style::default().fg(Color::LightBlue),
         )]),
         Spans::from(vec![Span::raw("")]),
@@ -470,16 +499,6 @@ fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>
 fn render_create_password<'a>(
     input_state: &'a InputState,
 ) -> (Paragraph<'a>, Paragraph<'a>, Paragraph<'a>) {
-    // let domain_input = Block::default()
-    //     .borders(Borders::ALL)
-    //     .style(match input_state.input_mode {
-    //         InputMode::DomainNormal => Style::default().fg(Color::Yellow),
-    //         InputMode::DomainEditing => Style::default().fg(Color::Green),
-    //         _ => Style::default().fg(Color::White),
-    //     })
-    //     .title("New Domain")
-    //     .border_type(BorderType::Plain);
-
     let domain_input = Paragraph::new(input_state.input_domain.as_ref())
         .style(match input_state.input_mode {
             InputMode::DomainNormal => Style::default().fg(Color::Yellow),
@@ -487,16 +506,6 @@ fn render_create_password<'a>(
             _ => Style::default().fg(Color::White),
         })
         .block(Block::default().borders(Borders::ALL).title("Domain"));
-
-    //   let username_input = Block::default()
-    //       .borders(Borders::ALL)
-    //       .style(match input_state.input_mode {
-    //           InputMode::UsernameNormal => Style::default().fg(Color::Yellow),
-    //           InputMode::UsernameEditing => Style::default().fg(Color::Green),
-    //           _ => Style::default().fg(Color::White),
-    //       })
-    //       .title("New Username")
-    //       .border_type(BorderType::Plain);
 
     let username_input = Paragraph::new(input_state.input_username.as_ref())
         .style(match input_state.input_mode {
@@ -513,16 +522,6 @@ fn render_create_password<'a>(
             _ => Style::default().fg(Color::White),
         })
         .block(Block::default().borders(Borders::ALL).title("Password"));
-
-    //  let password_input = Block::default()
-    //      .borders(Borders::ALL)
-    //      .style(match input_state.input_mode {
-    //          InputMode::PasswordNormal => Style::default().fg(Color::Yellow),
-    //          InputMode::PasswordEditing => Style::default().fg(Color::Green),
-    //          _ => Style::default().fg(Color::White),
-    //      })
-    //      .title("New Password")
-    //      .border_type(BorderType::Plain);
 
     return (domain_input, username_input, password_input);
 }
