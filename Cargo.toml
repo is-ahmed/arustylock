@@ -1,14 +1,20 @@
 [package]
 name = "a-rusty-lock"
 version = "0.1.0"
-authors = ["Mario Zupan <mario@zupzup.org>"]
+authors = ["Ismail Ahmed <isahmed0149@gmail.com>"]
 edition = "2018"
+description = "A CLI Password manager written in Rust"
+license = "APACHE 2.0"
 
 [dependencies]
-crossterm = { version = "0.19", features = [ "serde" ] }
-serde = {version = "1.0", features = ["derive"] }
+crossterm = { version = "0.19", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 rand = { version = "0.7.3", default-features = false, features = ["std"] }
-tui = { version = "0.14", default-features = false, features = ['crossterm', 'serde'] }
+tui = { version = "0.14", default-features = false, features = [
+  'crossterm',
+  'serde',
+] }
 thiserror = "1.0"
+cargo-rpm = "0.8.0"
