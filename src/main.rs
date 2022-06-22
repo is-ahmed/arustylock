@@ -1,9 +1,8 @@
-use chrono::prelude::*;
 use crossterm::{
-    event::{self, Event as CEvent, KeyCode, KeyEvent},
-    terminal::{disable_raw_mode, enable_raw_mode},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode, KeyEvent},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rand::{distributions::Alphanumeric, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::sync::mpsc;
@@ -23,7 +22,6 @@ use tui::{
 };
 
 const DB_PATH: &str = "./data/db.json";
-
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("error reading the DB file: {0}")]
@@ -37,14 +35,6 @@ enum Event<I> {
     Tick,
 }
 
-// #[derive(Serialize, Deserialize, Clone)]
-// struct Pet {
-//     id: usize,
-//     name: String,
-//     category: String,
-//     age: usize,
-//     created_at: DateTime<Utc>,
-// }
 // Password struct that will take the place of Pet
 #[derive(Serialize, Deserialize, Clone)]
 struct Password {
@@ -74,7 +64,6 @@ impl Default for InputMode {
         InputMode::DomainNormal
     }
 }
-
 // struct for managing state in adding new credentials
 #[derive(Default)]
 struct InputState {
@@ -99,8 +88,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(200);
+    let mut stdout = io::stdout();
 
-    let stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).expect("Entering alternate screen");
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
@@ -110,7 +100,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut password_list_state = ListState::default();
     let mut add_password_state = InputState::default();
     password_list_state.select(Some(0));
-
     thread::spawn(move || {
         let mut last_tick = Instant::now();
         loop {
@@ -249,6 +238,14 @@ fn handle_home_keyevent(
             KeyCode::Char('q') => {
                 // TODO: Command prompt not showing up properly after quiting
                 disable_raw_mode().expect("Disabling raw mode...");
+
+                execute!(
+                    terminal.backend_mut(),
+                    LeaveAlternateScreen,
+                    DisableMouseCapture
+                )
+                .expect("Leaving alternate screen...");
+                terminal.flush().expect("Clearing terminal...");
                 terminal.show_cursor().expect("Showing cursor...");
                 return;
             }
