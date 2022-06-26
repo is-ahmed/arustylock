@@ -18,3 +18,4 @@ tui = { version = "0.14", default-features = false, features = [
 ] }
 thiserror = "1.0"
 cargo-rpm = "0.8.0"
+orion = "0.15.4"

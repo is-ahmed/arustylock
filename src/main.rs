@@ -1,3 +1,6 @@
+mod encryption;
+mod tests;
+
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode, KeyEvent},
     execute,
@@ -84,13 +87,14 @@ impl From<MenuItem> for usize {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    enable_raw_mode().expect("can run in raw mode");
+    enable_raw_mode().expect("Can't run in raw mode");
 
     let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(200);
     let mut stdout = io::stdout();
 
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).expect("Entering alternate screen");
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
+        .expect("Failed to enter alternate screen");
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
@@ -107,9 +111,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or_else(|| Duration::from_secs(0));
 
-            if event::poll(timeout).expect("poll works") {
-                if let CEvent::Key(key) = event::read().expect("can read events") {
-                    tx.send(Event::Input(key)).expect("can send events");
+            if event::poll(timeout).expect("poll failed") {
+                if let CEvent::Key(key) = event::read().expect("Couldn't read event") {
+                    tx.send(Event::Input(key)).expect("Couldn't send events");
                 }
             }
 
@@ -237,16 +241,16 @@ fn handle_home_keyevent(
         Event::Input(event) => match event.code {
             KeyCode::Char('q') => {
                 // TODO: Command prompt not showing up properly after quiting
-                disable_raw_mode().expect("Disabling raw mode...");
+                disable_raw_mode().expect("Raw mode was not disabled");
 
                 execute!(
                     terminal.backend_mut(),
                     LeaveAlternateScreen,
                     DisableMouseCapture
                 )
-                .expect("Leaving alternate screen...");
-                terminal.flush().expect("Clearing terminal...");
-                terminal.show_cursor().expect("Showing cursor...");
+                .expect("Leaving alt screen failed");
+                terminal.flush().expect("Can't flush terminal");
+                terminal.show_cursor().expect("Unable to show cursor");
                 return;
             }
             KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
@@ -267,14 +271,14 @@ fn handle_passwords_keyevent(
     match key_event {
         Event::Input(event) => match event.code {
             KeyCode::Char('d') => {
-                remove_password_at_index(password_list_state).expect("Can remove password");
+                remove_password_at_index(password_list_state).expect("Couldn't remove password");
             }
             KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
             KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
             KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
             KeyCode::Char('j') => {
                 if let Some(selected) = password_list_state.selected() {
-                    let amount_passwords = read_db().expect("can fetch password list").len();
+                    let amount_passwords = read_db().expect("Couldn't fetch passwords").len();
                     if selected >= amount_passwords - 1 {
                         password_list_state.select(Some(0));
                     } else {
@@ -535,6 +539,7 @@ fn add_password_to_db(input_state: &InputState) -> Result<Vec<Password>, Error> 
 fn remove_password_at_index(password_list_state: &mut ListState) -> Result<(), Error> {
     // This is a workaround to prevent the program from crashing after removing
     // the last password
+
     let password_list = read_db().expect("can fetch password list");
     if password_list.len() > 1 {
         if let Some(selected) = password_list_state.selected() {
