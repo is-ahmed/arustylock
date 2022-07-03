@@ -19,8 +19,3 @@ fn test_decrypt_sanity() {
         decrypt_data(&mut file, &secret_key)
     }
 }
-#[test]
-fn it_works() {
-    let result = 2 + 2;
-    assert_eq!(result, 4);
-}
