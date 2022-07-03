@@ -1,5 +1,5 @@
 [package]
-name = "a-rusty-lock"
+name = "arustylock"
 version = "0.1.0"
 authors = ["Ismail Ahmed <isahmed0149@gmail.com>"]
 edition = "2018"

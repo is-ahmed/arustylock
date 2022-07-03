@@ -1,5 +1,4 @@
 mod encryption;
-mod tests;
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode, KeyEvent},

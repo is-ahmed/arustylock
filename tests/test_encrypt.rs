@@ -1,4 +1,4 @@
-use super::encryption::{decrypt_data, encrypt_data};
+use arustylock::encryption::encryption::*;
 use orion::{aead, aead::SecretKey};
 use std::fs::File;
 const SAMPLE_FILE_PATHS: [&str; 2] = ["./sample1.json", "./sample2.json"];
@@ -18,4 +18,9 @@ fn test_decrypt_sanity() {
         let mut file = File::open(SAMPLE_FILE_PATHS[i]).unwrap();
         decrypt_data(&mut file, &secret_key)
     }
+}
+#[test]
+fn it_works() {
+    let result = 2 + 2;
+    assert_eq!(result, 4);
 }
