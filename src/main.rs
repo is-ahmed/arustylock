@@ -5,8 +5,13 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use encryption::encryption::{decrypt_data, encrypt_data};
+use orion::{aead, aead::SecretKey};
 use serde::{Deserialize, Serialize};
 use std::io;
+use std::path::Path;
+use std::process::Command;
+use std::str;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -23,7 +28,6 @@ use tui::{
     Terminal,
 };
 
-const DB_PATH: &str = "./data/db.json";
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("error reading the DB file: {0}")]
@@ -37,7 +41,6 @@ enum Event<I> {
     Tick,
 }
 
-// Password struct that will take the place of Pet
 #[derive(Serialize, Deserialize, Clone)]
 struct Password {
     domain: String,
@@ -75,6 +78,13 @@ struct InputState {
     input_mode: InputMode,
 }
 
+// struct for managing overall app state
+#[derive(Default)]
+struct AppState {
+    config_path: String,
+    store_path: String,
+}
+
 impl From<MenuItem> for usize {
     fn from(input: MenuItem) -> usize {
         match input {
@@ -88,6 +98,37 @@ impl From<MenuItem> for usize {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode().expect("Can't run in raw mode");
 
+    let mut app = AppState::default();
+
+    // Adds in a newline char here
+    let mut user = Command::new("whoami")
+        .output()
+        .expect("Error finding out current user")
+        .stdout;
+    let len = user.len();
+    user.truncate(len - 1);
+
+    let config_dir = format!(
+        "/home/{}/.arustylock",
+        String::from_utf8(user).expect("Error reading stdout to string")
+    );
+
+    let store_path = format!("{}/data", config_dir);
+
+    if !Path::new(config_dir.as_str()).exists() {
+        Command::new("mkdir")
+            .arg(&config_dir)
+            .output()
+            .expect("Error making .arustylock directory");
+        let passwords_path = format!("{}", &store_path);
+        Command::new("touch")
+            .arg(passwords_path)
+            .output()
+            .expect("Error creating passwords file");
+    }
+
+    app.config_path = config_dir;
+    app.store_path = store_path;
     let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(200);
     let mut stdout = io::stdout();
@@ -184,7 +225,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             [Constraint::Percentage(20), Constraint::Percentage(80)].as_ref(),
                         )
                         .split(chunks[1]);
-                    let (left, right) = render_passwords(&password_list_state);
+                    let (left, right) = render_passwords(&password_list_state, &mut app);
                     rect.render_stateful_widget(
                         left,
                         passwords_chunks[0],
@@ -215,17 +256,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let received = rx.recv().unwrap();
         match active_menu_item {
             MenuItem::Home => {
-                handle_home_keyevent(&received, &mut active_menu_item, &mut terminal);
+                handle_home_keyevent(&received, &mut active_menu_item, &mut terminal, &mut app);
             }
             MenuItem::Passwords => {
                 handle_passwords_keyevent(
                     &received,
                     &mut active_menu_item,
                     &mut password_list_state,
+                    &mut app,
                 );
             }
             MenuItem::AddPassword => {
-                handle_add_keyevent(&received, &mut active_menu_item, &mut add_password_state);
+                handle_add_keyevent(
+                    &received,
+                    &mut active_menu_item,
+                    &mut add_password_state,
+                    &mut app,
+                );
             }
         }
     }
@@ -235,6 +282,7 @@ fn handle_home_keyevent(
     key_event: &Event<KeyEvent>,
     active_menu_item: &mut MenuItem,
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    app: &mut AppState,
 ) {
     match key_event {
         Event::Input(event) => match event.code {
@@ -266,18 +314,20 @@ fn handle_passwords_keyevent(
     key_event: &Event<KeyEvent>,
     active_menu_item: &mut MenuItem,
     password_list_state: &mut ListState,
+    app: &mut AppState,
 ) {
     match key_event {
         Event::Input(event) => match event.code {
             KeyCode::Char('d') => {
-                remove_password_at_index(password_list_state).expect("Couldn't remove password");
+                remove_password_at_index(password_list_state, app)
+                    .expect("Couldn't remove password");
             }
             KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
             KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
             KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
             KeyCode::Char('j') => {
                 if let Some(selected) = password_list_state.selected() {
-                    let amount_passwords = read_db().expect("Couldn't fetch passwords").len();
+                    let amount_passwords = read_db(app).expect("Couldn't fetch passwords").len();
                     if selected >= amount_passwords - 1 {
                         password_list_state.select(Some(0));
                     } else {
@@ -287,7 +337,7 @@ fn handle_passwords_keyevent(
             }
             KeyCode::Char('k') => {
                 if let Some(selected) = password_list_state.selected() {
-                    let amount_passwords = read_db().expect("can fetch password list").len();
+                    let amount_passwords = read_db(app).expect("can fetch password list").len();
                     if selected <= 0 {
                         password_list_state.select(Some(amount_passwords - 1));
                     } else {
@@ -306,6 +356,7 @@ fn handle_add_keyevent(
     key_event: &Event<KeyEvent>,
     active_menu_item: &mut MenuItem,
     input_state: &mut InputState,
+    app: &mut AppState,
 ) {
     match input_state.input_mode {
         InputMode::DomainNormal => match key_event {
@@ -361,7 +412,7 @@ fn handle_add_keyevent(
                 KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
                 KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
                 KeyCode::Enter => {
-                    add_password_to_db(input_state).expect("Added password");
+                    add_password_to_db(input_state, app).expect("Added password");
                     clear_input(input_state);
                 }
                 _ => {}
@@ -376,7 +427,7 @@ fn handle_add_keyevent(
                     input_state.input_password.pop();
                 }
                 KeyCode::Enter => {
-                    add_password_to_db(input_state).expect("Added password");
+                    add_password_to_db(input_state, app).expect("Added password");
                     clear_input(input_state);
                 }
                 _ => {}
@@ -417,14 +468,17 @@ fn render_home<'a>() -> Paragraph<'a> {
     home
 }
 
-fn render_passwords<'a>(password_list_state: &ListState) -> (List<'a>, Table<'a>) {
+fn render_passwords<'a>(
+    password_list_state: &ListState,
+    app: &mut AppState,
+) -> (List<'a>, Table<'a>) {
     let passwords = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
         .title("Passwords")
         .border_type(BorderType::Plain);
 
-    let password_list = read_db().expect("can fetch password list");
+    let password_list = read_db(app).expect("can fetch password list");
     let items: Vec<_> = password_list
         .iter()
         .map(|password| {
@@ -516,14 +570,17 @@ fn render_create_password<'a>(
     return (domain_input, username_input, password_input);
 }
 
-fn read_db() -> Result<Vec<Password>, Error> {
-    let db_content = fs::read_to_string(DB_PATH)?;
+fn read_db(app: &mut AppState) -> Result<Vec<Password>, Error> {
+    let db_content = fs::read_to_string(&app.store_path)?;
     let parsed: Vec<Password> = serde_json::from_str(&db_content)?;
     Ok(parsed)
 }
 
-fn add_password_to_db(input_state: &InputState) -> Result<Vec<Password>, Error> {
-    let db_content = fs::read_to_string(DB_PATH)?;
+fn add_password_to_db(
+    input_state: &InputState,
+    app: &mut AppState,
+) -> Result<Vec<Password>, Error> {
+    let db_content = fs::read_to_string(&app.store_path)?;
     let mut parsed: Vec<Password> = serde_json::from_str(&db_content)?;
     let new_password = Password {
         domain: input_state.input_domain.clone(),
@@ -531,21 +588,27 @@ fn add_password_to_db(input_state: &InputState) -> Result<Vec<Password>, Error> 
         password: input_state.input_password.clone(),
     };
     parsed.push(new_password);
-    fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
+    fs::write(&app.store_path, &serde_json::to_vec(&parsed)?)?;
+    let mut store = fs::File::create(&app.store_path).unwrap();
+    let key = aead::SecretKey::default();
+    encrypt_data(&mut store, &key);
     Ok(parsed)
 }
 
-fn remove_password_at_index(password_list_state: &mut ListState) -> Result<(), Error> {
+fn remove_password_at_index(
+    password_list_state: &mut ListState,
+    app: &mut AppState,
+) -> Result<(), Error> {
     // This is a workaround to prevent the program from crashing after removing
     // the last password
 
-    let password_list = read_db().expect("can fetch password list");
+    let password_list = read_db(app).expect("can fetch password list");
     if password_list.len() > 1 {
         if let Some(selected) = password_list_state.selected() {
-            let db_content = fs::read_to_string(DB_PATH)?;
+            let db_content = fs::read_to_string(&app.store_path)?;
             let mut parsed: Vec<Password> = serde_json::from_str(&db_content)?;
             parsed.remove(selected);
-            fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
+            fs::write(&app.store_path, &serde_json::to_vec(&parsed)?)?;
 
             if selected > 0 {
                 password_list_state.select(Some(selected - 1));
