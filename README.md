@@ -12,7 +12,7 @@ Ensure that you have [Rust](https://www.rust-lang.org/learn/get-started) install
 
 Clone the repository with whichever method you prefer.
 
-Navigate to the directory to where the repository was cloned and run ```cargo run``` in the terminal.
+Navigate to the directory to where the repository was cloned and run `cargo run` in the terminal.
 
 
 ## Contribution

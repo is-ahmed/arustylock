@@ -9,6 +9,7 @@ use encryption::encryption::{decrypt_data, encrypt_data};
 use orion::{aead, aead::SecretKey};
 use serde::{Deserialize, Serialize};
 use std::io;
+use std::io::prelude::*;
 use std::path::Path;
 use std::process::Command;
 use std::str;
@@ -16,6 +17,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 use std::{fs, io::Stdout};
+use std::{fs::OpenOptions, str::from_utf8};
 use thiserror::Error;
 use tui::{
     backend::CrosstermBackend,
@@ -121,10 +123,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .output()
             .expect("Error making .arustylock directory");
         let passwords_path = format!("{}", &store_path);
-        Command::new("touch")
-            .arg(passwords_path)
-            .output()
-            .expect("Error creating passwords file");
+        let mut store = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&passwords_path)
+            .unwrap();
+
+        store
+            .write(b"[{\"domain\": \"\", \"username\": \"\", \"password\": \"\" }]")
+            .unwrap();
+
+        let key = aead::SecretKey::default();
+        encrypt_data(&mut store, &key);
     }
 
     app.config_path = config_dir;
@@ -412,7 +423,7 @@ fn handle_add_keyevent(
                 KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
                 KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
                 KeyCode::Enter => {
-                    add_password_to_db(input_state, app).expect("Added password");
+                    add_password_to_db(input_state, app).expect("Failed to add password");
                     clear_input(input_state);
                 }
                 _ => {}
@@ -427,7 +438,7 @@ fn handle_add_keyevent(
                     input_state.input_password.pop();
                 }
                 KeyCode::Enter => {
-                    add_password_to_db(input_state, app).expect("Added password");
+                    add_password_to_db(input_state, app).expect("Failed to add password");
                     clear_input(input_state);
                 }
                 _ => {}
@@ -451,7 +462,7 @@ fn render_home<'a>() -> Paragraph<'a> {
         Spans::from(vec![Span::raw("to")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::styled(
-            "A Rusty Lock - The (((best))) password manager",
+            "A Rusty Lock - The \"\"\"best\"\"\" password manager",
             Style::default().fg(Color::LightBlue),
         )]),
         Spans::from(vec![Span::raw("")]),
@@ -478,7 +489,7 @@ fn render_passwords<'a>(
         .title("Passwords")
         .border_type(BorderType::Plain);
 
-    let password_list = read_db(app).expect("can fetch password list");
+    let password_list = read_db(app).expect("Couldn't fetch passwords list");
     let items: Vec<_> = password_list
         .iter()
         .map(|password| {
@@ -493,9 +504,9 @@ fn render_passwords<'a>(
         .get(
             password_list_state
                 .selected()
-                .expect("there is always a selected password"),
+                .expect("Couldn't get selected password"),
         )
-        .expect("exists")
+        .expect("Error getting selected password")
         .clone();
 
     let list = List::new(items).block(passwords).highlight_style(
@@ -571,8 +582,14 @@ fn render_create_password<'a>(
 }
 
 fn read_db(app: &mut AppState) -> Result<Vec<Password>, Error> {
-    let db_content = fs::read_to_string(&app.store_path)?;
-    let parsed: Vec<Password> = serde_json::from_str(&db_content)?;
+    let mut store = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&app.store_path)
+        .unwrap();
+    let key = aead::SecretKey::default();
+    let data = decrypt_data(&mut store, &key);
+    let parsed: Vec<Password> = serde_json::from_str(from_utf8(&data).unwrap())?;
     Ok(parsed)
 }
 
@@ -589,7 +606,11 @@ fn add_password_to_db(
     };
     parsed.push(new_password);
     fs::write(&app.store_path, &serde_json::to_vec(&parsed)?)?;
-    let mut store = fs::File::create(&app.store_path).unwrap();
+    let mut store = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&app.store_path)
+        .unwrap();
     let key = aead::SecretKey::default();
     encrypt_data(&mut store, &key);
     Ok(parsed)
