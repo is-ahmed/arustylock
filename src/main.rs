@@ -85,6 +85,7 @@ struct InputState {
 struct AppState {
     config_path: String,
     store_path: String,
+    secret_key: aead::SecretKey,
 }
 
 impl From<MenuItem> for usize {
@@ -116,6 +117,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let store_path = format!("{}/data", config_dir);
+    let secret_key = SecretKey::default();
 
     if !Path::new(config_dir.as_str()).exists() {
         Command::new("mkdir")
@@ -134,12 +136,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .write(b"[{\"domain\": \"\", \"username\": \"\", \"password\": \"\" }]")
             .unwrap();
 
-        let key = aead::SecretKey::default();
-        encrypt_data(&mut store, &key);
+        encrypt_data(&mut store, &secret_key);
     }
 
     app.config_path = config_dir;
     app.store_path = store_path;
+    app.secret_key = secret_key;
     let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(200);
     let mut stdout = io::stdout();
@@ -587,8 +589,7 @@ fn read_db(app: &mut AppState) -> Result<Vec<Password>, Error> {
         .write(true)
         .open(&app.store_path)
         .unwrap();
-    let key = aead::SecretKey::default();
-    let data = decrypt_data(&mut store, &key);
+    let data = decrypt_data(&mut store, &app.secret_key);
     let parsed: Vec<Password> = serde_json::from_str(from_utf8(&data).unwrap())?;
     Ok(parsed)
 }
