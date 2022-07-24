@@ -5,7 +5,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use encryption::encryption::{decrypt_data, encrypt_data};
+use encryption::encryption::{decrypt_data, encrypt_data, reset_file_cursor};
 use orion::{aead, aead::SecretKey};
 use serde::{Deserialize, Serialize};
 use std::io;
@@ -598,22 +598,29 @@ fn add_password_to_db(
     input_state: &InputState,
     app: &mut AppState,
 ) -> Result<Vec<Password>, Error> {
-    let db_content = fs::read_to_string(&app.store_path)?;
-    let mut parsed: Vec<Password> = serde_json::from_str(&db_content)?;
+    let mut store = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&app.store_path)
+        .unwrap();
+    let data = decrypt_data(&mut store, &app.secret_key);
+    let mut parsed: Vec<Password> = serde_json::from_str(from_utf8(&data).unwrap())?;
     let new_password = Password {
         domain: input_state.input_domain.clone(),
         username: input_state.input_username.clone(),
         password: input_state.input_password.clone(),
     };
     parsed.push(new_password);
-    fs::write(&app.store_path, &serde_json::to_vec(&parsed)?)?;
-    let mut store = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(&app.store_path)
-        .unwrap();
-    let key = aead::SecretKey::default();
-    encrypt_data(&mut store, &key);
+    // Convert this into Vec<u8> and then encrypt it and then write it to the store
+    let json_string: String = serde_json::to_string(&parsed).unwrap();
+    let slice: &[u8] = json_string.as_bytes();
+    let cipher_text = aead::seal(&app.secret_key, &slice).unwrap();
+
+    // fs::write(&app.store_path, &serde_json::to_vec(&parsed)?)?;
+    reset_file_cursor(&mut store);
+    store.set_len(0).unwrap();
+    store.write_all(&cipher_text).unwrap();
+    // File is already encrypted at this point, so it's redundant
     Ok(parsed)
 }
 
@@ -623,15 +630,28 @@ fn remove_password_at_index(
 ) -> Result<(), Error> {
     // This is a workaround to prevent the program from crashing after removing
     // the last password
-
     let password_list = read_db(app).expect("can fetch password list");
     if password_list.len() > 1 {
         if let Some(selected) = password_list_state.selected() {
-            let db_content = fs::read_to_string(&app.store_path)?;
-            let mut parsed: Vec<Password> = serde_json::from_str(&db_content)?;
-            parsed.remove(selected);
-            fs::write(&app.store_path, &serde_json::to_vec(&parsed)?)?;
+            // TODO: Redo this part to use the encryption
+            let mut store = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&app.store_path)
+                .unwrap();
+            let data = decrypt_data(&mut store, &app.secret_key);
+            let mut parsed: Vec<Password> = serde_json::from_str(from_utf8(&data).unwrap())?;
 
+            parsed.remove(selected);
+
+            let json_string: String = serde_json::to_string(&parsed).unwrap();
+            let slice: &[u8] = json_string.as_bytes();
+            let cipher_text = aead::seal(&app.secret_key, &slice).unwrap();
+
+            //fs::write(&app.store_path, &serde_json::to_vec(&parsed)?)?;
+            reset_file_cursor(&mut store);
+            store.set_len(0).unwrap();
+            store.write_all(&cipher_text).unwrap();
             if selected > 0 {
                 password_list_state.select(Some(selected - 1));
             }
