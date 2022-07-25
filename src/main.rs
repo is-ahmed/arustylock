@@ -8,7 +8,6 @@ use crossterm::{
 use encryption::encryption::{decrypt_data, encrypt_data, reset_file_cursor};
 use orion::{aead, aead::SecretKey};
 use serde::{Deserialize, Serialize};
-use std::io;
 use std::io::prelude::*;
 use std::path::Path;
 use std::process::Command;
@@ -18,6 +17,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::{fs, io::Stdout};
 use std::{fs::OpenOptions, str::from_utf8};
+use std::{io, process::exit};
 use thiserror::Error;
 use tui::{
     backend::CrosstermBackend,
@@ -117,7 +117,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let store_path = format!("{}/data", config_dir);
-    let secret_key = SecretKey::default();
+
+    // Can't use the default since it randomly generates a key each time
+    // Might need to entirely redo how we encrypt if we actually want security lol
+    // Perhaps another day...
+    let secret_key = SecretKey::from_slice("qaz123WSX$%^edcplm098IJN765uhbZQ".as_bytes()).unwrap();
 
     if !Path::new(config_dir.as_str()).exists() {
         Command::new("mkdir")
@@ -277,6 +281,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &mut active_menu_item,
                     &mut password_list_state,
                     &mut app,
+                    &mut terminal,
                 );
             }
             MenuItem::AddPassword => {
@@ -285,6 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &mut active_menu_item,
                     &mut add_password_state,
                     &mut app,
+                    &mut terminal,
                 );
             }
         }
@@ -300,7 +306,6 @@ fn handle_home_keyevent(
     match key_event {
         Event::Input(event) => match event.code {
             KeyCode::Char('q') => {
-                // TODO: Command prompt not showing up properly after quiting
                 disable_raw_mode().expect("Raw mode was not disabled");
 
                 execute!(
@@ -309,9 +314,8 @@ fn handle_home_keyevent(
                     DisableMouseCapture
                 )
                 .expect("Leaving alt screen failed");
-                terminal.flush().expect("Can't flush terminal");
                 terminal.show_cursor().expect("Unable to show cursor");
-                return;
+                exit(0);
             }
             KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
             KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
@@ -328,12 +332,25 @@ fn handle_passwords_keyevent(
     active_menu_item: &mut MenuItem,
     password_list_state: &mut ListState,
     app: &mut AppState,
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
 ) {
     match key_event {
         Event::Input(event) => match event.code {
             KeyCode::Char('d') => {
                 remove_password_at_index(password_list_state, app)
                     .expect("Couldn't remove password");
+            }
+            KeyCode::Char('q') => {
+                disable_raw_mode().expect("Raw mode was not disabled");
+
+                execute!(
+                    terminal.backend_mut(),
+                    LeaveAlternateScreen,
+                    DisableMouseCapture
+                )
+                .expect("Leaving alt screen failed");
+                terminal.show_cursor().expect("Unable to show cursor");
+                exit(0);
             }
             KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
             KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
@@ -370,6 +387,7 @@ fn handle_add_keyevent(
     active_menu_item: &mut MenuItem,
     input_state: &mut InputState,
     app: &mut AppState,
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
 ) {
     match input_state.input_mode {
         InputMode::DomainNormal => match key_event {
@@ -379,6 +397,19 @@ fn handle_add_keyevent(
                 KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
                 KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
                 KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+                KeyCode::Char('q') => {
+                    disable_raw_mode().expect("Raw mode was not disabled");
+
+                    execute!(
+                        terminal.backend_mut(),
+                        LeaveAlternateScreen,
+                        DisableMouseCapture
+                    )
+                    .expect("Leaving alt screen failed");
+                    terminal.show_cursor().expect("Unable to show cursor");
+                    exit(0)
+                }
+
                 _ => {}
             },
             Event::Tick => {}
@@ -402,6 +433,18 @@ fn handle_add_keyevent(
                 KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
                 KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
                 KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+                KeyCode::Char('q') => {
+                    disable_raw_mode().expect("Raw mode was not disabled");
+
+                    execute!(
+                        terminal.backend_mut(),
+                        LeaveAlternateScreen,
+                        DisableMouseCapture
+                    )
+                    .expect("Leaving alt screen failed");
+                    terminal.show_cursor().expect("Unable to show cursor");
+                    exit(0);
+                }
                 _ => {}
             },
             Event::Tick => {}
@@ -424,6 +467,19 @@ fn handle_add_keyevent(
                 KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
                 KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
                 KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+                KeyCode::Char('q') => {
+                    disable_raw_mode().expect("Raw mode was not disabled");
+
+                    execute!(
+                        terminal.backend_mut(),
+                        LeaveAlternateScreen,
+                        DisableMouseCapture
+                    )
+                    .expect("Leaving alt screen failed");
+                    terminal.show_cursor().expect("Unable to show cursor");
+                    exit(0);
+                }
+
                 KeyCode::Enter => {
                     add_password_to_db(input_state, app).expect("Failed to add password");
                     clear_input(input_state);
@@ -633,7 +689,6 @@ fn remove_password_at_index(
     let password_list = read_db(app).expect("can fetch password list");
     if password_list.len() > 1 {
         if let Some(selected) = password_list_state.selected() {
-            // TODO: Redo this part to use the encryption
             let mut store = OpenOptions::new()
                 .read(true)
                 .write(true)
