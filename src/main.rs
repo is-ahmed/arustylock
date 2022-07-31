@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     user.truncate(len - 1);
 
     let config_dir = format!(
-        "/home/{}/.arustylock",
+        "/home/{}/.config/arustylock",
         String::from_utf8(user).expect("Error reading stdout to string")
     );
 
