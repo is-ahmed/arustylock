@@ -98,23 +98,72 @@ impl From<MenuItem> for usize {
     }
 }
 
+fn create_windows_config(store_path: &String, config_dir: &String, secret_key: &SecretKey) {
+
+    fs::create_dir_all(&config_dir).unwrap();
+         let mut store = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&store_path)
+            .unwrap();
+
+    store
+        .write(b"[{\"domain\": \"\", \"username\": \"\", \"password\": \"\" }]")
+        .unwrap();
+
+    encrypt_data(&mut store, &secret_key);
+
+}
+
+fn create_unix_config(store_path: &String, config_dir: &String, secret_key: &SecretKey) {
+    Command::new("mkdir")
+            .arg(config_dir)
+            .output()
+            .expect("Error making .arustylock directory");
+        let mut store = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&store_path)
+            .unwrap();
+
+        store
+            .write(b"[{\"domain\": \"\", \"username\": \"\", \"password\": \"\" }]")
+            .unwrap();
+
+        encrypt_data(&mut store, &secret_key);
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode().expect("Can't run in raw mode");
 
     let mut app = AppState::default();
 
     // Adds in a newline char here
+    // so we want to truncate it
     let mut user = Command::new("whoami")
         .output()
         .expect("Error finding out current user")
         .stdout;
     let len = user.len();
     user.truncate(len - 1);
+    let config_dir: String;
 
-    let config_dir = format!(
-        "/home/{}/.config/arustylock",
-        String::from_utf8(user).expect("Error reading stdout to string")
-    );
+    if cfg!(windows) {
+
+        config_dir = format!(
+           "C:\\Users\\{}\\AppData\\Roaming\\arustylock",
+            String::from_utf8(user).expect("Error reading stdout to string")
+        );
+
+    } else {
+        config_dir = format!(
+            "/home/{}/.config/arustylock",
+            String::from_utf8(user).expect("Error reading stdout to string")
+        );
+    }
+
 
     let store_path = format!("{}/data", config_dir);
 
@@ -124,23 +173,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let secret_key = SecretKey::from_slice("qaz123WSX$%^edcplm098IJN765uhbZQ".as_bytes()).unwrap();
 
     if !Path::new(config_dir.as_str()).exists() {
-        Command::new("mkdir")
-            .arg(&config_dir)
-            .output()
-            .expect("Error making .arustylock directory");
-        let passwords_path = format!("{}", &store_path);
-        let mut store = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(&passwords_path)
-            .unwrap();
-
-        store
-            .write(b"[{\"domain\": \"\", \"username\": \"\", \"password\": \"\" }]")
-            .unwrap();
-
-        encrypt_data(&mut store, &secret_key);
+        if cfg!(windows) {
+            create_windows_config(&store_path, &config_dir, &secret_key);
+        } else {
+            create_unix_config(&store_path, &config_dir, &secret_key);
+        }
     }
 
     app.config_path = config_dir;
