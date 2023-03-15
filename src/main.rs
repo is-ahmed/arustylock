@@ -55,6 +55,7 @@ enum MenuItem {
     Home,
     Passwords,
     AddPassword,
+    GetKey
 }
 
 enum InputMode {
@@ -72,6 +73,7 @@ impl Default for InputMode {
     }
 }
 // struct for managing state in adding new credentials
+// TODO: Consider making AppState and InputState into a single struct that gets passed around
 #[derive(Default)]
 struct InputState {
     input_domain: String,
@@ -94,6 +96,7 @@ impl From<MenuItem> for usize {
             MenuItem::Home => 0,
             MenuItem::Passwords => 1,
             MenuItem::AddPassword => 2,
+            MenuItem::GetKey => 3,
         }
     }
 }
@@ -135,6 +138,16 @@ fn create_unix_config(store_path: &String, config_dir: &String, secret_key: &Sec
         encrypt_data(&mut store, &secret_key);
 }
 
+
+fn get_key_from_user() -> Result<String, Error> {
+    
+   use std::io::{stdin,stdout,write};
+   let mut s=String::new();
+
+   
+   
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode().expect("Can't run in raw mode");
 
@@ -170,7 +183,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Can't use the default since it randomly generates a key each time
     // Might need to entirely redo how we encrypt if we actually want security lol
     // Perhaps another day...
+    let input = get_key_from_user(); 
     let secret_key = SecretKey::from_slice("qaz123WSX$%^edcplm098IJN765uhbZQ".as_bytes()).unwrap();
+    
 
     if !Path::new(config_dir.as_str()).exists() {
         if cfg!(windows) {
@@ -304,6 +319,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     rect.render_widget(center, add_layout[1]);
                     rect.render_widget(bottom, add_layout[2]);
                 }
+                MenuItem::GetKey => {
+
+                    let key_layout = Layout::default().split(chunks[1]);
+                    let input = render_get_key();
+
+                    rect.render_widget(input, key_layout[0]);
+
+                }
             }
             rect.render_widget(copyright, chunks[2]);
         })?;
@@ -330,7 +353,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &mut terminal,
                 );
             }
+            MenuItem::GetKey => {
+
+            }
         }
+    }
+}
+
+fn handle_getkey_keyevent(
+    key_event: &Event<KeyEvent>,
+    active_menu_item: &mut MenuItem,
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    app: &mut AppState,
+) {
+    match key_event {
+
     }
 }
 
@@ -572,6 +609,21 @@ fn render_home<'a>() -> Paragraph<'a> {
             .border_type(BorderType::Plain),
     );
     home
+}
+
+fn render_get_key<'a>(
+    input_state: &'a InputState
+) -> Paragraph<'a> {
+     let key_input = Paragraph::new(input_state.input_domain.as_ref())
+        .style(match input_state.input_mode {
+            InputMode::DomainNormal => Style::default().fg(Color::Yellow),
+            InputMode::DomainEditing => Style::default().fg(Color::Green),
+            _ => Style::default().fg(Color::White),
+        })
+        .block(Block::default().borders(Borders::ALL).title("Domain"));
+    
+    return key_input
+
 }
 
 fn render_passwords<'a>(
