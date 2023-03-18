@@ -1,4 +1,5 @@
 mod encryption;
+mod types;
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode, KeyEvent},
@@ -65,6 +66,8 @@ enum InputMode {
     UsernameNormal,
     PasswordEditing,
     PasswordNormal,
+    KeyEditing,
+    KeyNormal,
 }
 
 impl Default for InputMode {
@@ -79,6 +82,7 @@ struct InputState {
     input_domain: String,
     input_username: String,
     input_password: String,
+    input_key: String,
     input_mode: InputMode,
 }
 
@@ -139,10 +143,9 @@ fn create_unix_config(store_path: &String, config_dir: &String, secret_key: &Sec
 }
 
 
-fn get_key_from_user() -> Result<String, Error> {
+fn validate_key(key: &String) -> Result<Error, u64> {
     
-   use std::io::{stdin,stdout,write};
-   let mut s=String::new();
+   let _s=String::new();
 
    
    
@@ -183,7 +186,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Can't use the default since it randomly generates a key each time
     // Might need to entirely redo how we encrypt if we actually want security lol
     // Perhaps another day...
-    let input = get_key_from_user(); 
+    let _input = get_key_from_user(); 
     let secret_key = SecretKey::from_slice("qaz123WSX$%^edcplm098IJN765uhbZQ".as_bytes()).unwrap();
     
 
@@ -211,7 +214,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let menu_titles = vec!["Home", "Passwords", "Add", "Delete", "Quit"];
     let mut active_menu_item = MenuItem::Home;
     let mut password_list_state = ListState::default();
-    let mut add_password_state = InputState::default();
+    let mut input_state = InputState::default();
     password_list_state.select(Some(0));
     thread::spawn(move || {
         let mut last_tick = Instant::now();
@@ -314,15 +317,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .as_ref(),
                         )
                         .split(chunks[1]);
-                    let (top, center, bottom) = render_create_password(&add_password_state);
+                    let (top, center, bottom) = render_create_password(&input_state);
                     rect.render_widget(top, add_layout[0]);
                     rect.render_widget(center, add_layout[1]);
                     rect.render_widget(bottom, add_layout[2]);
                 }
                 MenuItem::GetKey => {
 
-                    let key_layout = Layout::default().split(chunks[1]);
-                    let input = render_get_key();
+                    let key_layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(
+                            [
+                                Constraint::Percentage(100)
+                            ].as_ref(),
+                        )
+                        .split(chunks[1]);
+                    let input = render_get_key(&input_state); 
 
                     rect.render_widget(input, key_layout[0]);
 
@@ -348,7 +358,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 handle_add_keyevent(
                     &received,
                     &mut active_menu_item,
-                    &mut add_password_state,
+                    &mut input_state,
                     &mut app,
                     &mut terminal,
                 );
@@ -363,11 +373,160 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn handle_getkey_keyevent(
     key_event: &Event<KeyEvent>,
     active_menu_item: &mut MenuItem,
+    input_state: &mut InputState,
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
-    app: &mut AppState,
+    _app: &mut AppState,
 ) {
-    match key_event {
 
+    match input_state.input_mode {
+        InputMode::KeyNormal => match key_event{
+            Event::Input(event) => match event.code {
+               KeyCode::Char('q') => {
+                    disable_raw_mode().expect("Raw mode was not disabled");
+
+                    execute!(
+                        terminal.backend_mut(),
+                        LeaveAlternateScreen,
+                        DisableMouseCapture
+                    )
+                    .expect("Leaving alt screen failed");
+                    terminal.show_cursor().expect("Unable to show cursor");
+                    exit(0)
+                }
+
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+        InputMode::KeyEditing => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Esc => input_state.input_mode = InputMode::KeyNormal,
+                KeyCode::Char(c) => input_state.input_key.push(c),
+                KeyCode::Backspace => {
+                    input_state.input_key.pop();
+                }
+                KeyCode::Enter => {
+                    clear_input(input_state);
+                    validate_key(&input_state.input_key);
+                }
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+
+        InputMode::DomainNormal => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Char('i') => input_state.input_mode = InputMode::DomainEditing,
+                KeyCode::Char('j') => input_state.input_mode = InputMode::UsernameNormal,
+                KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
+                KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
+                KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+                KeyCode::Char('q') => {
+                    disable_raw_mode().expect("Raw mode was not disabled");
+
+                    execute!(
+                        terminal.backend_mut(),
+                        LeaveAlternateScreen,
+                        DisableMouseCapture
+                    )
+                    .expect("Leaving alt screen failed");
+                    terminal.show_cursor().expect("Unable to show cursor");
+                    exit(0)
+                }
+
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+        InputMode::DomainEditing => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Esc => input_state.input_mode = InputMode::DomainNormal,
+                KeyCode::Char(c) => input_state.input_domain.push(c),
+                KeyCode::Backspace => {
+                    input_state.input_domain.pop();
+                }
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+        InputMode::UsernameNormal => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Char('i') => input_state.input_mode = InputMode::UsernameEditing,
+                KeyCode::Char('j') => input_state.input_mode = InputMode::PasswordNormal,
+                KeyCode::Char('k') => input_state.input_mode = InputMode::DomainNormal,
+                KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
+                KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
+                KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+                KeyCode::Char('q') => {
+                    disable_raw_mode().expect("Raw mode was not disabled");
+
+                    execute!(
+                        terminal.backend_mut(),
+                        LeaveAlternateScreen,
+                        DisableMouseCapture
+                    )
+                    .expect("Leaving alt screen failed");
+                    terminal.show_cursor().expect("Unable to show cursor");
+                    exit(0);
+                }
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+        InputMode::UsernameEditing => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Esc => input_state.input_mode = InputMode::UsernameNormal,
+                KeyCode::Char(c) => input_state.input_username.push(c),
+                KeyCode::Backspace => {
+                    input_state.input_username.pop();
+                }
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+        InputMode::PasswordNormal => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Char('i') => input_state.input_mode = InputMode::PasswordEditing,
+                KeyCode::Char('k') => input_state.input_mode = InputMode::UsernameNormal,
+                KeyCode::Char('h') => *active_menu_item = MenuItem::Home,
+                KeyCode::Char('p') => *active_menu_item = MenuItem::Passwords,
+                KeyCode::Char('a') => *active_menu_item = MenuItem::AddPassword,
+                KeyCode::Char('q') => {
+                    disable_raw_mode().expect("Raw mode was not disabled");
+
+                    execute!(
+                        terminal.backend_mut(),
+                        LeaveAlternateScreen,
+                        DisableMouseCapture
+                    )
+                    .expect("Leaving alt screen failed");
+                    terminal.show_cursor().expect("Unable to show cursor");
+                    exit(0);
+                }
+
+                KeyCode::Enter => {
+                    add_password_to_db(input_state, app).expect("Failed to add password");
+                    clear_input(input_state);
+                }
+                _ => {}
+            },
+            Event::Tick => {}
+        },
+        InputMode::PasswordEditing => match key_event {
+            Event::Input(event) => match event.code {
+                KeyCode::Esc => input_state.input_mode = InputMode::PasswordNormal,
+                KeyCode::Char(c) => input_state.input_password.push(c),
+                KeyCode::Backspace => {
+                    input_state.input_password.pop();
+                }
+                KeyCode::Enter => {
+                    add_password_to_db(input_state, app).expect("Failed to add password");
+                    clear_input(input_state);
+                }
+                _ => {}
+            },
+            Event::Tick => {}
+        }
     }
 }
 
@@ -375,7 +534,7 @@ fn handle_home_keyevent(
     key_event: &Event<KeyEvent>,
     active_menu_item: &mut MenuItem,
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
-    app: &mut AppState,
+    _app: &mut AppState,
 ) {
     match key_event {
         Event::Input(event) => match event.code {
@@ -611,20 +770,7 @@ fn render_home<'a>() -> Paragraph<'a> {
     home
 }
 
-fn render_get_key<'a>(
-    input_state: &'a InputState
-) -> Paragraph<'a> {
-     let key_input = Paragraph::new(input_state.input_domain.as_ref())
-        .style(match input_state.input_mode {
-            InputMode::DomainNormal => Style::default().fg(Color::Yellow),
-            InputMode::DomainEditing => Style::default().fg(Color::Green),
-            _ => Style::default().fg(Color::White),
-        })
-        .block(Block::default().borders(Borders::ALL).title("Domain"));
-    
-    return key_input
 
-}
 
 fn render_passwords<'a>(
     password_list_state: &ListState,
@@ -697,6 +843,22 @@ fn render_passwords<'a>(
 
     (list, password_detail)
 }
+
+fn render_get_key<'a>(
+    input_state: &'a InputState
+) -> Paragraph<'a> {
+     let key_input = Paragraph::new(input_state.input_domain.as_ref())
+        .style(match input_state.input_mode {
+            InputMode::DomainNormal => Style::default().fg(Color::Yellow),
+            InputMode::DomainEditing => Style::default().fg(Color::Green),
+            _ => Style::default().fg(Color::White),
+        })
+        .block(Block::default().borders(Borders::ALL).title("Domain"));
+    
+    return key_input
+
+}
+
 
 fn render_create_password<'a>(
     input_state: &'a InputState,
